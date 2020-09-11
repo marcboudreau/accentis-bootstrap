@@ -1,0 +1,194 @@
+################################################################################
+#
+# accentis-bootstrap Script Functions
+#
+# This file defines functions called by the accentis-bootstrap procedure script.
+#
+################################################################################
+
+#
+# check_bash:
+#    This function verifies that an appropriate version of Bash is installed.
+#    If the version of Bash is older than 3.2, an error will be displayed and
+#    the script will exit.
+#
+function check_bash {
+    bash_version=$(echo $BASH_VERSION | cut -d. -f1-2)
+
+    if [[ $(echo "$bash_version < 3.2" | bc -l) == 1 ]]; then
+        echo "ERROR: Unsupported version of Bash (version $BASH_VERSION is older than 3.2)"
+        exit 1
+    fi
+}
+
+#
+# check_docker:
+#   This function verifies that an appropriate version of Docker is installed
+#   and that it is running.  If either the client version or engine version is
+#   older than 19.03, or the engine is not running, an error will be displayed
+#   and the script will exit.
+#
+function check_docker {
+    client_version=$(docker version 2> /dev/null | grep -A 1 '^Client:' | grep 'Version:' | awk '{print $2}')
+    server_version=$(docker version 2> /dev/null | grep -A 2 '^Server:' | grep 'Version:' | awk '{print $2}')
+
+    if [[ -z $server_version ]]; then
+        echo 'ERROR: Docker Engine is not running'
+        exit 1
+    fi
+
+    client_version_abbr=$(echo $client_version | cut -d. -f1-2)
+    server_version_abbr=$(echo $server_version | cut -d. -f1-2)
+
+    if [[ $(echo "$client_version_abbr < 19.03" | bc -l) == 1 ]]; then
+        echo "ERROR: Unsupported version of Docker client running (version $client_version is older than 19.03)"
+        exit 1
+    fi
+
+    if [[ $(echo "$server_version_abbr < 19.03" | bc -l) ==  1 ]]; then
+        echo "ERROR: Unsupported version of Docker engine running (version $server_version is older than 19.03)"
+        exit 1
+    fi
+}
+
+#
+# check_state_file:
+#   This function looks for an existing state file in the expected path.  If one
+#   is not found, the script asks the operator if this is the very first setup.
+#   If the operator answers 'no', the script will display an error and exit.
+#
+#   This function requires the root_directory variable to have been set to the
+#   absolute path of the directory containing this script.
+#
+function check_state_file {
+    if ! stat $root_directory/state/terraform.tfstate 2> /dev/null; then
+        read -p "Is this the first execution of this bootstrap procedure? (y/N): " answer
+        if [[ ${answer:0:1} != y ]] && [[ ${answer:0:1} != Y ]]; then
+            echo "ERROR: The state file from the previous execution is missing from the path: $root_directory/state/terraform.tfstate"
+            exit 1
+        fi
+    fi
+}
+
+#
+# prompt_secret:
+#   This function is a general purpose function that can prompt the operator for
+#   a sensitive value, ensuring that the value is not echoed to the console as
+#   it is entered.
+#
+function prompt_secret {
+    read -s -p "Enter $1 (will be hidden):" answer
+    echo $answer
+}
+
+#
+# gcp_login:
+#   This function ensures that Google Cloud application default credentials are
+#   in place under the temporary directory.  As a convenience, the current
+#   user's home directory will be examined for an existing application default
+#   credentials file, and if one is found the operator will be given the option
+#   to use those credentials.  If the operator declines using the credentials
+#   that were found, or none exist, a login operation will be launched.
+#
+function gcp_login {
+    # Create a subdirectory for the GCP credentials.
+    mkdir $work_directory/gcp_creds
+
+    # Look for Application Default Credentials already on the workstation
+    if stat $HOME/.config/gcloud/application_default_credentials.json > /dev/null ; then
+        echo "Google Cloud application default credentials already exist on this workstation."
+        echo "You can choose to use these, or complete 2-legged OAuth exchange to obtain new credentials (the existing workstation credentials won't be affected)."
+        read -p "Do you want to use the existing credentials? (Y/n): " answer
+
+        if [[ ${answer:0:1} != n ]] && [[ ${answer:0:1} != N ]]; then
+            # Create a symbolic link to the workstations GCP credentials directory.
+            cp $HOME/.config/gcloud/application_default_credentials.json $work_directory/gcp_creds/
+            return 0
+        fi
+    fi
+
+    docker run -it \
+        --mount type=bind,source="$work_directory/gcp_creds",target=/root/.config/gcloud \
+        gcr.io/google.com/cloudsdktool/cloud-sdk:latest \
+        gcloud auth application-default login
+}
+
+#
+# run_terraform:
+#   This function handles running Terraform in a docker container.
+#
+#   This function relies on the following variables being defined:
+#     root_directory        The root directory of this repository.
+#     terraform_command     The terraform command to run.
+#     work_directory        The temporary working directory created for this execution.
+#     terraform_cloud_token The API token used to access Terraform Cloud APIs.
+#
+function run_terraform {
+    docker run -it \
+        --mount type=bind,source="$root_directory",target=/work \
+        --mount type=bind,source="$work_directory/gcp_creds",target=/root/.config/gcloud,readonly \
+        -w /work \
+        hashicorp/terraform:0.13.2 \
+        init
+
+    docker run -it \
+        -e TFE_TOKEN=$terraform_cloud_token \
+        --mount type=bind,source="$root_directory",target=/work \
+        --mount type=bind,source="$work_directory/gcp_creds",target=/root/.config/gcloud,readonly \
+        -w /work \
+        hashicorp/terraform:0.13.2 \
+        $terraform_command "$@"
+}
+
+#
+# accentis_vault_usable:
+#   This function looks for an environment variable containing the Accentis
+#   Vault endpoint.  If it finds it, it then looks for an environment variable
+#   containing a Vault token.  If both of these environment variables are
+#   found, it attempts to validate the Vault token.  If this last step passes
+#   the function returns with a success status, indicating that the Vault is
+#   already up and running and can be used to obtain credentials.
+#
+function accentis_vault_usable {
+    if [[ ${ACCENTIS_VAULT_ADDR:+x} == x ]] && [[ ${ACCENTIS_VAULT_TOKEN:+} == x ]]; then
+        if curl -f -H "X-Vault-Token: $ACCENTIS_VAULT_TOKEN" $ACCENTIS_VAULT_ADDR/v1/auth/token/lookup-self > /dev/null ; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+#
+# accentis_vault:
+#   This function is a convenient wrapper that runs Vault commands using a
+#   container, so that the Vault client doesn't need to be installed on the
+#   workstation.  This function passes all of its arguments to the container
+#   as vault arguments.
+#
+function accentis_vault {
+    docker run -it \
+        -e VAULT_TOKEN=$ACCENTIS_VAULT_TOKEN \
+        -e VAULT_ADDR=$ACCENTIS_VAULT_ADDR \
+        -e SKIP_SETCAP=1 \
+        vault:latest \
+        vault "$@"
+}
+
+#
+# accentis_gcloud: 
+#   This function is a convenient wrapper that runs gcloud commands using a
+#   container, so that Google Cloud SDK doesn't need to be installed on the
+#   workstation.  This function passes all of its arguments to the container
+#   as gcloud arguments.  This function also ensures that the directory
+#   $work_directory/gcp_creds exists, and bind mounts that directory as a
+#   volume into the container.
+#
+function accentis_gcloud {
+    mkdir -p $work_directory/gcp_creds
+
+    docker run -it \
+        --mount type=bind,source=$work_directory/gcp_creds,target=/root/.config/gcloud \
+        gcr.io/google.com/cloudsdktool/cloud-sdk:latest \
+        gcloud "@$@"
+}
