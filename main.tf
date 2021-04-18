@@ -22,7 +22,7 @@ terraform {
     hostname     = "app.terraform.io"
     organization = "accentis"
 
-    workspace {
+    workspaces {
         name = "bootstrap"
     }
   }
@@ -36,14 +36,17 @@ terraform {
 #     service_provider = "github"
 # }
 
-# resource "tfe_workspace" "bootstrap" {
-#   name               = "bootstrap"
-#   organization       = "accentis"
-#   allow_destroy_plan = false
-#   execution_mode     = "remote"
-#   vcs_repo {
-#       identifier = "value"
-#       branch = "main"
-#   }
-# }
+resource "tfe_workspace" "bootstrap" {
+  name                  = "bootstrap"
+  organization          = "accentis"
+  allow_destroy_plan    = false
+  queue_all_runs        = false
+  execution_mode        = "remote"
+
+  vcs_repo {
+      identifier     = "marcboudreau/accentis-bootstrap"
+      branch         = "main"
+      oauth_token_id = ""
+  }
+}
 
