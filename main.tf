@@ -16,6 +16,10 @@ terraform {
     tfe = {
         version = "~> 0.24.0"
     }
+    github = {
+        source  = "integrations/github"
+        version = "~> 4.9.2"
+    }
   }
 
   backend "remote" {
@@ -35,18 +39,4 @@ terraform {
 #     oauth_token      = "value"
 #     service_provider = "github"
 # }
-
-resource "tfe_workspace" "bootstrap" {
-  name                  = "bootstrap"
-  organization          = "accentis"
-  allow_destroy_plan    = false
-  queue_all_runs        = false
-  execution_mode        = "remote"
-
-  vcs_repo {
-      identifier     = "marcboudreau/accentis-bootstrap"
-      branch         = "main"
-      oauth_token_id = ""
-  }
-}
 
