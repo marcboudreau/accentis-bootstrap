@@ -54,7 +54,7 @@ resource "tfe_variable" "gcp_project_credentials" {
 resource "github_repository" "gcp_project" {
     name          = "accentis-gcp-project"
     description   = "A Terraform project containing the configuration for project-wide resources in GCP Projects used for Accentis"
-    visibility    = "private"
+    visibility    = "public"
     has_issues    = true
     has_projects  = false
     has_downloads = false
