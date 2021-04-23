@@ -46,7 +46,7 @@ resource "tfe_variable" "gcp_project_credentials" {
     key          = "GOOGLE_CREDENTIALS"
     value        = replace(base64decode(var.gcp_credentials[each.value]),"\n","")
     category     = "env"
-    sensitive    = false
+    sensitive    = true
     description  = "Service Account Key used to make GCP API calls"
     workspace_id = tfe_workspace.gcp_project[each.value].id
 }
