@@ -27,7 +27,7 @@ resource "tfe_workspace" "bootstrap" {
 resource "github_repository" "bootstrap" {
     name         = "accentis-bootstrap"
     description  = "A Terraform project containing the bootstrap configuration for GitHub and Terraform Cloud resources"
-    visibility   = "private"
+    visibility   = "public"
     has_issues   = true
     has_projects = false
 
