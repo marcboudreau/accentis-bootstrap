@@ -1,3 +1,15 @@
+################################################################################
+#
+# bootstrap
+#   A Terraform project that bootstraps various resources needed to develop
+#   and deploy Accentis.
+#
+# bootstrap.tf
+#   Defines the resources related to the CVS repository and corresponding
+#   Terraform Cloud workspace.
+#
+################################################################################
+
 resource "tfe_workspace" "bootstrap" {
   name                  = "bootstrap"
   organization          = "accentis"
