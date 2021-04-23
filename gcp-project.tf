@@ -10,20 +10,10 @@
 #
 ################################################################################
 
-locals {
-    #
-    # project_ids is a list of GCP Project ID to manage.  The list items are
-    # are actually just the variable part that comes after 'accentis-'.
-    #
-    project_ids = [
-        "288921"
-    ]
-}
-
 resource "tfe_workspace" "gcp_project" {
-    for_each = toset(local.project_ids)
+    for_each = toset(var.gcp_projects)
 
-    name                  = "accentis-gcp-project-${each.value}"
+    name                  = "accentis-gcp-project-${element(split("-", each.value), 1)}"
     organization          = "accentis"
     allow_destroy_plan    = false
     queue_all_runs        = false
@@ -33,28 +23,28 @@ resource "tfe_workspace" "gcp_project" {
 }
 
 resource "tfe_variable" "gcp_project_project_id" {
-    for_each = toset(local.project_ids)
+    for_each = toset(var.gcp_projects)
 
     key          = "project_id"
-    value        = "accentis-${each.value}"
+    value        = each.value
     category     = "terraform"
     workspace_id = tfe_workspace.gcp_project[each.value].id
 }
 
 resource "tfe_variable" "gcp_project_default_sa" {
-    for_each = toset(local.project_ids)
+    for_each = toset(var.gcp_projects)
 
     key          = "default_compute_engine_service_account"
-    value        = var.default_compute_engine_service_accounts["accentis-${each.value}"]
+    value        = var.default_compute_engine_service_accounts[each.value]
     category     = "terraform"
     workspace_id = tfe_workspace.gcp_project[each.value].id
 }
 
 resource "tfe_variable" "gcp_project_credentials" {
-    for_each = toset(local.project_ids)
+    for_each = toset(var.gcp_projects)
 
     key          = "GOOGLE_CREDENTIALS"
-    value        = base64decode(var.gcp_credentials["accentis-${each.value}"])
+    value        = base64decode(var.gcp_credentials[each.value])
     category     = "env"
     sensitive    = true
     description  = "Service Account Key used to make GCP API calls"

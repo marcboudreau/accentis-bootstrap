@@ -18,3 +18,8 @@ variable "gcp_credentials" {
     description = "A map of base64 encoded GCP credentials for each managed GCP project"
     type        = map
 }
+
+variable "gcp_projects" {
+    description = "A list of GCP projects managed by this project"
+    type        = list(string)
+}
