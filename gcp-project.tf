@@ -40,16 +40,16 @@ resource "tfe_variable" "gcp_project_default_sa" {
     workspace_id = tfe_workspace.gcp_project[each.value].id
 }
 
-resource "tfe_variable" "gcp_project_credentials" {
-    for_each = toset(var.gcp_projects)
+# resource "tfe_variable" "gcp_project_credentials" {
+#     for_each = toset(var.gcp_projects)
 
-    key          = "GOOGLE_CREDENTIALS"
-    value        = base64decode(var.gcp_credentials[each.value])
-    category     = "env"
-    sensitive    = false
-    description  = "Service Account Key used to make GCP API calls"
-    workspace_id = tfe_workspace.gcp_project[each.value].id
-}
+#     key          = "GOOGLE_CREDENTIALS"
+#     value        = base64decode(var.gcp_credentials[each.value])
+#     category     = "env"
+#     sensitive    = false
+#     description  = "Service Account Key used to make GCP API calls"
+#     workspace_id = tfe_workspace.gcp_project[each.value].id
+# }
 
 resource "github_repository" "gcp_project" {
     name          = "accentis-gcp-project"
